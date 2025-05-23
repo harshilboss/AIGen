@@ -8,13 +8,14 @@ import requests
 app = Flask(__name__)
 CORS(app)
 
-# Read from environment variables (configured in Render)
-openai.api_key = os.environ.get("OPENAI_API_KEY")
-url = "https://movieplay-zvp8.onrender.com/sendCommand"
+# Get keys from environment variables
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+COMMAND_TARGET_URL = 'https://movieplay-zvp8.onrender.com/sendCommand'
 
- 
+# Initialize OpenAI client (v1.x style)
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-# Sends a command to your target (Quest, etc.)
+# Sends command to external system (e.g. Quest shell endpoint)
 def send_command(url, command):
     try:
         response = requests.post(url, json={"command": command})
@@ -23,15 +24,17 @@ def send_command(url, command):
     except requests.exceptions.RequestException as e:
         print(f"❌ Error sending command: {e}")
 
-# Example functions
+# GPT-callable function: adds numbers + triggers device command
 def add_numbers(a, b):
     command = "am start -n com.oculus.vrshell/.MainActivity -d apk://com.oculus.browser -e uri 'http://google.com/'"
-    send_command(url, command)
+    send_command(COMMAND_TARGET_URL, command)
     return f"The sum of {a} and {b} is {a + b}."
 
+# GPT-callable function: greets by name
 def greet(name):
     return f"Hello, {name}! Nice to meet you."
 
+# Function mapping
 function_map = {
     "add_numbers": add_numbers,
     "greet": greet
@@ -40,57 +43,62 @@ function_map = {
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.json
-    user_message = data["message"]
+    user_message = data.get("message", "")
 
-    client = openai.OpenAI()
-
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant that can also call functions when needed."},
-            {"role": "user", "content": user_message}
-        ],
-        functions=[
-            {
-                "name": "add_numbers",
-                "description": "Add two numbers and trigger a device command.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "a": {"type": "integer"},
-                        "b": {"type": "integer"}
-                    },
-                    "required": ["a", "b"]
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that can call functions when needed."},
+                {"role": "user", "content": user_message}
+            ],
+            functions=[
+                {
+                    "name": "add_numbers",
+                    "description": "Add two numbers and optionally trigger an ADB command.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "a": {"type": "integer"},
+                            "b": {"type": "integer"}
+                        },
+                        "required": ["a", "b"]
+                    }
+                },
+                {
+                    "name": "greet",
+                    "description": "Greet a person by name.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"}
+                        },
+                        "required": ["name"]
+                    }
                 }
-            },
-            {
-                "name": "greet",
-                "description": "Greet someone by name.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "name": {"type": "string"}
-                    },
-                    "required": ["name"]
-                }
-            }
-        ],
-        function_call="auto"
-    )
+            ],
+            function_call="auto"
+        )
 
-    message = response.choices[0].message
+        message = response.choices[0].message
 
-    if message.function_call:
-        fn_name = message.function_call.name
-        args = json.loads(message.function_call.arguments)
-        if fn_name in function_map:
-            try:
-                result = function_map[fn_name](**args)
-                return jsonify({"response": result})
-            except Exception as e:
-                return jsonify({"response": f"Error: {str(e)}"})
-    else:
+        # Function call?
+        if message.function_call:
+            fn_name = message.function_call.name
+            args = json.loads(message.function_call.arguments)
+
+            if fn_name in function_map:
+                try:
+                    result = function_map[fn_name](**args)
+                    return jsonify({"response": result})
+                except Exception as e:
+                    return jsonify({"response": f"Function error: {str(e)}"})
+
+        # Normal chat response
         return jsonify({"response": message.content})
+
+    except Exception as e:
+        return jsonify({"response": f"❌ API error: {str(e)}"})
 
 if __name__ == "__main__":
     app.run(debug=True)
