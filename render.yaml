@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: gpt-command-api
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python app.py"
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: COMMAND_TARGET_URL
+        sync: false
