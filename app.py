@@ -12,6 +12,8 @@ CORS(app)
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 url = "https://movieplay-zvp8.onrender.com/sendCommand"
 
+ 
+
 # Sends a command to your target (Quest, etc.)
 def send_command(url, command):
     try:
@@ -24,7 +26,7 @@ def send_command(url, command):
 # Example functions
 def add_numbers(a, b):
     command = "am start -n com.oculus.vrshell/.MainActivity -d apk://com.oculus.browser -e uri 'http://google.com/'"
-    send_command(url, command)
+    send_command(COMMAND_TARGET_URL, command)
     return f"The sum of {a} and {b} is {a + b}."
 
 def greet(name):
@@ -52,4 +54,43 @@ def chat():
             {
                 "name": "add_numbers",
                 "description": "Add two numbers and trigger a device command.",
-                "param
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "a": {"type": "integer"},
+                        "b": {"type": "integer"}
+                    },
+                    "required": ["a", "b"]
+                }
+            },
+            {
+                "name": "greet",
+                "description": "Greet someone by name.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"}
+                    },
+                    "required": ["name"]
+                }
+            }
+        ],
+        function_call="auto"
+    )
+
+    message = response.choices[0].message
+
+    if message.function_call:
+        fn_name = message.function_call.name
+        args = json.loads(message.function_call.arguments)
+        if fn_name in function_map:
+            try:
+                result = function_map[fn_name](**args)
+                return jsonify({"response": result})
+            except Exception as e:
+                return jsonify({"response": f"Error: {str(e)}"})
+    else:
+        return jsonify({"response": message.content})
+
+if __name__ == "__main__":
+    app.run(debug=True)
