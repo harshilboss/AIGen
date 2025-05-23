@@ -26,7 +26,7 @@ def send_command(url, command):
 # Example functions
 def add_numbers(a, b):
     command = "am start -n com.oculus.vrshell/.MainActivity -d apk://com.oculus.browser -e uri 'http://google.com/'"
-    send_command(COMMAND_TARGET_URL, command)
+    send_command(url, command)
     return f"The sum of {a} and {b} is {a + b}."
 
 def greet(name):
