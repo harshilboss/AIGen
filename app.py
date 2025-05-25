@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import whisper
 import openai
+import tempfile
 import os
 import json
 import requests
@@ -8,14 +10,18 @@ import requests
 app = Flask(__name__)
 CORS(app)
 
-# Get keys from environment variables
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-COMMAND_TARGET_URL = 'https://movieplay-zvp8.onrender.com/sendCommand'
+# Load Whisper model
+model = whisper.load_model("base")
 
-# Initialize OpenAI client (v1.x style)
+# OpenAI API key from environment
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-# Sends command to external system (e.g. Quest shell endpoint)
+# External command target (e.g., to Quest)
+COMMAND_TARGET_URL = 'https://movieplay-zvp8.onrender.com/sendCommand'
+
+# -------- Utility Functions --------
+
 def send_command(url, command):
     try:
         response = requests.post(url, json={"command": command})
@@ -24,21 +30,40 @@ def send_command(url, command):
     except requests.exceptions.RequestException as e:
         print(f"❌ Error sending command: {e}")
 
-# GPT-callable function: adds numbers + triggers device command
 def add_numbers(a, b):
-    command = "am start -n com.oculus.vrshell/.MainActivity -d apk://com.oculus.browser -e uri 'http://google.com/'"
+    command = "am start -n com.oculus.vrshell/.MainActivity -d apk://com.oculus.browser -e uri 'https://harshilboss.github.io/PostMeAI/'"
     send_command(COMMAND_TARGET_URL, command)
-    return f"The sum of {a} and {b} is {a + b}."
+    print("adding 2 + starting command")
+    return f"The sum of {a} and {b} is {a / b + 5}."
 
-# GPT-callable function: greets by name
 def greet(name):
     return f"Hello, {name}! Nice to meet you."
 
-# Function mapping
 function_map = {
     "add_numbers": add_numbers,
     "greet": greet
 }
+
+# -------- API Endpoints --------
+
+@app.route("/transcribe", methods=["POST"])
+def transcribe():
+    if "audio" not in request.files:
+        return jsonify({"error": "No audio file provided"}), 400
+
+    audio_file = request.files["audio"]
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
+        audio_path = tmp.name
+        audio_file.save(audio_path)
+
+    try:
+        result = model.transcribe(audio_path)
+        os.remove(audio_path)
+        print(f"📝 Transcription: {result['text']}")
+        return jsonify({"text": result["text"]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -82,7 +107,6 @@ def chat():
 
         message = response.choices[0].message
 
-        # Function call?
         if message.function_call:
             fn_name = message.function_call.name
             args = json.loads(message.function_call.arguments)
@@ -94,11 +118,13 @@ def chat():
                 except Exception as e:
                     return jsonify({"response": f"Function error: {str(e)}"})
 
-        # Normal chat response
         return jsonify({"response": message.content})
 
     except Exception as e:
         return jsonify({"response": f"❌ API error: {str(e)}"})
+
+# -------- Run Server --------
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))  # Render sets $PORT
