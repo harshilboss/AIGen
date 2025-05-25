@@ -24,7 +24,8 @@ def send_command(url, command):
     except Exception as e:
         print(f"❌ Command failed: {e}")
 
-# GPT callable functions
+# === GPT callable functions ===
+
 def add_numbers(a, b):
     command = "am start -n com.oculus.vrshell/.MainActivity -d apk://com.oculus.browser -e uri 'https://harshilboss.github.io/PostMeAI/'"
     send_command(COMMAND_TARGET_URL, command)
@@ -33,9 +34,20 @@ def add_numbers(a, b):
 def greet(name):
     return f"Hello, {name}! Nice to meet you."
 
+def open_url(url):
+    send_command(COMMAND_TARGET_URL , f"am start -n com.oculus.vrshell/.MainActivity -d apk://com.oculus.browser -e uri {url}")
+    return f"🔗 Opening your requested URL"
+
+def open_two_urls(url1, url2):
+    send_command(COMMAND_TARGET_URL , f"am start -n com.oculus.vrshell/.MainActivity -d apk://com.oculus.browser -e uri '{url1}' && am start -n com.oculus.browser/.PanelActivity -d '{url2}'")
+    return f"🔗Opening your requested URL"
+
+# === Function registry ===
 function_map = {
     "add_numbers": add_numbers,
-    "greet": greet
+    "greet": greet,
+    "open_url": open_url,
+    "open_two_urls": open_two_urls
 }
 
 @app.route("/transcribe", methods=["POST"])
@@ -98,6 +110,29 @@ def chat():
                             "name": {"type": "string"}
                         },
                         "required": ["name"]
+                    }
+                },
+                {
+                    "name": "open_url",
+                    "description": "Return a URL the user asked for.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "url": {"type": "string"}
+                        },
+                        "required": ["url"]
+                    }
+                },
+                {
+                    "name": "open_two_urls",
+                    "description": "Return two URLs the user requested at the same time.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "url1": {"type": "string"},
+                            "url2": {"type": "string"}
+                        },
+                        "required": ["url1", "url2"]
                     }
                 }
             ],
