@@ -6,7 +6,7 @@ import json
 import requests
 import tempfile
 import ffmpeg
- 
+
 app = Flask(__name__)
 CORS(app)
 
@@ -75,10 +75,9 @@ def transcribe():
         return jsonify({"text": transcript["text"]})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-app = Flask(__name__)
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+ 
+ 
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 @app.route("/tts", methods=["POST"])
 def tts():
